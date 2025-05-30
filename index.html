@@ -77,24 +77,22 @@
         // Reset state screenshot
         count = 0;
         screenshot.textContent = "📷";
+
+        // Event listener dipindah ke luar fungsi
+        screenshot.addEventListener("click", function() {
+          if (count) {
+            window.location.reload();
+            return;
+          }
+          
+          html2canvas(result).then((canvas) => {
+            screenshot.setAttribute("href", canvas.toDataURL("image/png")); // Perbaikan method
+            screenshot.textContent = "📥";
+            count = 1;
+          });
+        });
       }
 
-      // Event listener dipindah ke luar fungsi
-      screenshot.addEventListener("click", function() {
-        if (count) {
-          window.location.reload();
-          return;
-        }
-        
-        html2canvas(result).then((canvas) => {
-          screenshot.setAttribute("href", canvas.toDataURL("image/png")); // Perbaikan method
-          screenshot.textContent = "📥";
-          count = 1;
-        });
-      });
-
-      // Panggil fungsi pertama kali
-      generateIdea();
     </script>
   </body>
 </html>
