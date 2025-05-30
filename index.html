@@ -40,7 +40,7 @@
         <div class="center">Capture Quotes</div>
         <div class="right">
           <ons-toolbar-button>
-            <a download id="screenshoot">📷</a>
+            <a download id="screenshot">📷</a> <!-- Perbaikan typo id -->
           </ons-toolbar-button>
         </div>
       </ons-toolbar>
@@ -56,33 +56,45 @@
     </ons-page>
     
     <script>
+      // Variabel global untuk state
+      let count = 0;
+      
+      // Inisialisasi elemen
+      const result = document.getElementById("result");
+      const activity = document.getElementById("activity");
+      const type = document.getElementById("type");
+      const screenshot = document.getElementById("screenshot"); // Perbaikan typo id
+
       async function generateIdea() {
-        const result = document.getElementById("result");
-        const activity = document.getElementById("activity");
-        const type = document.getElementById("type");
-        const screenshoot = document.getElementById("screenshoot");
-        
         const url = "https://bored-api.appbrewery.com/random";
-        const response = fetch(url);
-        
+        const response = await fetch(url); // Tambahkan await
         const api = await response.json();
         
         activity.textContent = api.activity;
         type.textContent = api.type;
-        
         type.style.display = "block";
-        let count = 0;
         
-        screenshoot.addEventListener("click", function() {
-          count && return window.location.reload();
-          
-          html2canvas(result).then((callback) => {
-            screenshoot.setAttribute("href", callback.toDataUrl("image/png"));
-            screenshoot.textContent = "📥";
-            count = 1;
-          });
-        });
+        // Reset state screenshot
+        count = 0;
+        screenshot.textContent = "📷";
       }
+
+      // Event listener dipindah ke luar fungsi
+      screenshot.addEventListener("click", function() {
+        if (count) {
+          window.location.reload();
+          return;
+        }
+        
+        html2canvas(result).then((canvas) => {
+          screenshot.setAttribute("href", canvas.toDataURL("image/png")); // Perbaikan method
+          screenshot.textContent = "📥";
+          count = 1;
+        });
+      });
+
+      // Panggil fungsi pertama kali
+      generateIdea();
     </script>
   </body>
 </html>
