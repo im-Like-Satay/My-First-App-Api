@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Finder - Pencari Perangkat IoT dengan Shodan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        dark: '#1F2937',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .device-card {
+            transition: all 0.3s ease;
+        }
+        .device-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #e5e7eb;
+            border-bottom-color: #3B82F6;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 8px;
+        }
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: #c5c5c5;
+            border-radius: 4px;
+        }
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center">
+                <i class="fas fa-search-location text-primary text-2xl mr-3"></i>
+                <h1 class="text-xl font-bold text-gray-800">IoT Finder</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="relative">
+                    <input type="text" id="apiKey" placeholder="Masukkan API Key Shodan" 
+                           class="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-64">
+                    <button id="saveApiKey" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-primary">
+                        <i class="fas fa-save"></i>
+                    </button>
+                </div>
+                <button id="infoBtn" class="bg-gray-200 hover:bg-gray-300 rounded-full p-2 transition">
+                    <i class="fas fa-info-circle text-gray-600"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <!-- Hero Section -->
+        <section class="text-center mb-12">
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">Temukan Perangkat IoT di Seluruh Dunia</h2>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                Gunakan alat ini untuk mencari perangkat IoT menggunakan API Shodan. Temukan kamera, router, server, dan perangkat IoT lainnya secara real-time.
+            </p>
+        </section>
+
+        <!-- Search Controls -->
+        <section class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="md:col-span-3">
+                    <input type="text" id="searchQuery" placeholder="Contoh: webcam, router, printer, server" 
+                           class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                <div>
+                    <button id="searchBtn" class="w-full bg-primary hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition duration-300">
+                        <i class="fas fa-search mr-2"></i> Cari Perangkat
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Filter Negara</label>
+                    <select id="countryFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                        <option value="">Semua Negara</option>
+                        <option value="ID">Indonesia</option>
+                        <option value="US">Amerika Serikat</option>
+                        <option value="CN">China</option>
+                        <option value="JP">Jepang</option>
+                        <option value="DE">Jerman</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                    <input type="number" id="portFilter" placeholder="Port (contoh: 80, 443)" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Organisasi</label>
+                    <input type="text" id="orgFilter" placeholder="Nama organisasi" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Hasil Pencarian</h2>
+                <div id="resultStats" class="text-gray-600">Menampilkan 0 perangkat</div>
+            </div>
+
+            <div id="loading" class="hidden flex justify-center py-12">
+                <div class="loader"></div>
+            </div>
+
+            <div id="resultsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Hasil akan ditampilkan di sini -->
+                <div class="text-center py-12 text-gray-500">
+                    <i class="fas fa-search fa-3x mb-4"></i>
+                    <p>Masukkan kata kunci pencarian untuk menemukan perangkat IoT</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Shodan Features -->
+        <section class="mt-16">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Fitur Lainnya dari Shodan</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-map-marker-alt text-primary text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Pencarian Geografis</h3>
+                    <p class="text-gray-600 mb-4">Temukan perangkat IoT berdasarkan lokasi geografis dengan koordinat GPS atau nama kota.</p>
+                    <button class="text-primary font-medium hover:underline">Coba Sekarang</button>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-shield-alt text-secondary text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Analisis Kerentanan</h3>
+                    <p class="text-gray-600 mb-4">Identifikasi kerentanan keamanan pada perangkat IoT yang ditemukan.</p>
+                    <button class="text-primary font-medium hover:underline">Coba Sekarang</button>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-chart-line text-purple-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Trend Perangkat</h3>
+                    <p class="text-gray-600 mb-4">Analisis tren penggunaan perangkat IoT berdasarkan jenis dan lokasi.</p>
+                    <button class="text-primary font-medium hover:underline">Coba Sekarang</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h3 class="text-xl font-bold">Tentang Alat IoT Finder</h3>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto scrollbar-custom" style="max-height: calc(90vh - 60px);">
+                <div class="flex items-center mb-4">
+                    <div class="bg-gray-200 border-2 border-dashed rounded-xl w-16 h-16" />
+                    <div class="ml-4">
+                        <h4 class="font-bold text-lg">IoT Finder</h4>
+                        <p class="text-gray-600">Alat Pencari Perangkat IoT dengan Shodan API</p>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <h4 class="font-bold text-lg mb-2">Apa itu Shodan?</h4>
+                    <p class="text-gray-700 mb-4">
+                        Shodan adalah mesin pencari yang memungkinkan pengguna untuk menemukan berbagai jenis perangkat 
+                        (termasuk server, router, webcam, dan perangkat IoT lainnya) yang terhubung ke internet menggunakan berbagai filter.
+                    </p>
+                    <p class="text-gray-700">
+                        Shodan mengumpulkan data dari perangkat-perangkat yang terhubung langsung ke internet dan mengindeks informasi 
+                        seperti lokasi, port yang terbuka, dan layanan yang berjalan.
+                    </p>
+                </div>
+                
+                <div class="mb-6">
+                    <h4 class="font-bold text-lg mb-2">Cara Menggunakan</h4>
+                    <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                        <li>Dapatkan API key Shodan dari website resmi Shodan</li>
+                        <li>Masukkan API key pada input di pojok kanan atas</li>
+                        <li>Masukkan kata kunci pencarian (contoh: webcam, router, printer)</li>
+                        <li>Gunakan filter untuk menyempurnakan pencarian</li>
+                        <li>Klik tombol "Cari Perangkat" untuk memulai pencarian</li>
+                    </ol>
+                </div>
+                
+                <div class="bg-blue-50 border-l-4 border-primary p-4 mb-6">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle text-primary text-xl"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-blue-700">
+                                Alat ini hanya untuk tujuan edukasi dan penelitian. Pengguna bertanggung jawab penuh atas penggunaan alat ini sesuai dengan kebijakan Shodan dan hukum yang berlaku.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simulasi data perangkat IoT
+        const deviceTypes = [
+            "webcam", "router", "printer", "server", "smart tv", 
+            "security camera", "industrial control", "voip phone", "smart thermostat"
+        ];
+        
+        const countries = {
+            "ID": "Indonesia",
+            "US": "Amerika Serikat",
+            "CN": "China",
+            "JP": "Jepang",
+            "DE": "Jerman",
+            "GB": "Inggris",
+            "FR": "Perancis",
+            "BR": "Brazil",
+            "IN": "India"
+        };
+        
+        const organizations = [
+            "PT Telekomunikasi Indonesia",
+            "PT Indosat Ooredoo",
+            "PT XL Axiata",
+            "Google LLC",
+            "Amazon.com, Inc.",
+            "Microsoft Corporation",
+            "Alibaba Cloud",
+            "Tencent Cloud"
+        ];
+        
+        // Fungsi untuk menghasilkan perangkat acak untuk simulasi
+        function generateRandomDevices(count) {
+            const devices = [];
+            for (let i = 0; i < count; i++) {
+                const randomType = deviceTypes[Math.floor(Math.random() * deviceTypes.length)];
+                const countryKeys = Object.keys(countries);
+                const randomCountry = countryKeys[Math.floor(Math.random() * countryKeys.length)];
+                
+                devices.push({
+                    id: Math.floor(Math.random() * 10000),
+                    ip: `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+                    port: [80, 443, 8080, 22, 21][Math.floor(Math.random() * 5)],
+                    type: randomType,
+                    country: randomCountry,
+                    organization: organizations[Math.floor(Math.random() * organizations.length)],
+                    lastSeen: `2023-0${Math.floor(Math.random() * 9) + 1}-${Math.floor(Math.random() * 28) + 1}`,
+                    data: `Perangkat ${randomType} yang ditemukan di ${countries[randomCountry]}.`
+                });
+            }
+            return devices;
+        }
+        
+        // Simpan API Key
+        document.getElementById('saveApiKey').addEventListener('click', function() {
+            const apiKey = document.getElementById('apiKey').value;
+            if (apiKey) {
+                localStorage.setItem('shodanApiKey', apiKey);
+                alert('API Key berhasil disimpan!');
+            } else {
+                alert('Silakan masukkan API Key terlebih dahulu');
+            }
+        });
+        
+        // Cek apakah ada API Key yang tersimpan
+        window.addEventListener('load', function() {
+            const savedApiKey = localStorage.getItem('shodanApiKey');
+            if (savedApiKey) {
+                document.getElementById('apiKey').value = savedApiKey;
+            }
+        });
+        
+        // Modal Info
+        document.getElementById('infoBtn').addEventListener('click', function() {
+            document.getElementById('infoModal').classList.remove('hidden');
+        });
+        
+        document.getElementById('closeModal').addEventListener('click', function() {
+            document.getElementById('infoModal').classList.add('hidden');
+        });
+        
+        // Pencarian perangkat
+        document.getElementById('searchBtn').addEventListener('click', function() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) {
+                alert('Silakan masukkan kata kunci pencarian');
+                return;
+            }
+            
+            // Tampilkan loading
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('resultsContainer').innerHTML = '';
+            
+            // Simulasi waktu tunggu
+            setTimeout(() => {
+                const countryFilter = document.getElementById('countryFilter').value;
+                const portFilter = document.getElementById('portFilter').value;
+                const orgFilter = document.getElementById('orgFilter').value.toLowerCase();
+                
+                // Generate random devices (in real app, this would be API call)
+                const devices = generateRandomDevices(9);
+                
+                // Filter devices
+                const filteredDevices = devices.filter(device => {
+                    if (countryFilter && device.country !== countryFilter) return false;
+                    if (portFilter && device.port !== parseInt(portFilter)) return false;
+                    if (orgFilter && !device.organization.toLowerCase().includes(orgFilter)) return false;
+                    return true;
+                });
+                
+                // Update result stats
+                document.getElementById('resultStats').textContent = `Menampilkan ${filteredDevices.length} perangkat`;
+                
+                // Render results
+                const resultsContainer = document.getElementById('resultsContainer');
+                resultsContainer.innerHTML = '';
+                
+                if (filteredDevices.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div class="col-span-3 text-center py-12">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 text-4xl mb-4"></i>
+                            <p class="text-gray-600">Tidak ditemukan perangkat dengan filter yang diberikan</p>
+                        </div>
+                    `;
+                } else {
+                    filteredDevices.forEach(device => {
+                        const deviceCard = document.createElement('div');
+                        deviceCard.className = 'device-card bg-white rounded-xl shadow-md overflow-hidden';
+                        deviceCard.innerHTML = `
+                            <div class="p-5 border-b">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-bold text-lg text-gray-800">${device.ip}</h3>
+                                        <p class="text-gray-600 text-sm">${device.organization}</p>
+                                    </div>
+                                    <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${device.country}</span>
+                                </div>
+                            </div>
+                            <div class="p-5">
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center mr-3">
+                                        <i class="fas fa-ethernet text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-500">Port</p>
+                                        <p class="font-medium">${device.port}</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center mr-3">
+                                        <i class="fas fa-wifi text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-500">Jenis Perangkat</p>
+                                        <p class="font-medium capitalize">${device.type}</p>
+                                    </div>
+                                </div>
+                         
